@@ -107,17 +107,7 @@ def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: fl
             with open(openpath_name, "a+") as f:
                 json.dump(first_batch_data[i], f)
                 f.write('\n')
-# read data according to the time slot
-def slot_cluster_read(file_path: str,batch_size: int,total_time: float,start_time: float, time_slot: float, slot_order: int):
-    folder_name = "slot_cluster_totaltime_"+str(total_time)+"_time_slot_"+str(time_slot)
-    openfile_name =  f"file_"+str(slot_order)+".txt"
-    openpath_name = os.path.join(folder_name, openfile_name)
-    folder_data = []
-    with open(openpath_name, "r") as f:
-        for line in f:
-            item = json.loads(line)
-            folder_data.append(item)
-    return folder_data
+
 if __name__ == '__main__':
     # 获取当前工作目录
     current_dir = os.getcwd()
@@ -146,5 +136,3 @@ if __name__ == '__main__':
     
     slot_cluster(file_path, batch_size,total_time,start_time,time_slot)
 
-    #slot_order = 0
-    #slot_cluster_read(file_path, batch_size,total_time,start_time,time_slot, slot_order)
