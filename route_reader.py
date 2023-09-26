@@ -2,7 +2,9 @@ import re
 import pandas as pd
 import numpy as np
 import torch
-
+import os
+import json
+import pickle
 def read_routing_table(file_path):
     routing_table = []
     
@@ -116,6 +118,17 @@ def get_full_path_r(routing_df):
     return path_dict
 
 if __name__ == '__main__':
+    # 获取当前工作目录
+    current_dir = os.getcwd()
+
+    # 输出当前工作目录
+    print("当前工作目录：", current_dir)
+
+    # 更改当前工作目录
+    os.chdir('/home/zhanghua/qiaojing')
+
+    # 输出更改后的工作目录
+    print("更改后的工作目录：", os.getcwd())
     file_path = "hpccroute_8smaller.txt"
     # Read the routing table from the file
     routing_table = read_routing_table(file_path)
@@ -144,9 +157,13 @@ if __name__ == '__main__':
     save_tensor(routing_tensor, save_path)
     
     path_dict = get_full_path_r(routing_df)
+    openpath_name = 'routing_path.pkl'
 
     # Create a DataFrame to store the full paths from source to destination
     paths_data = [{'source': src, 'destination': dst, 'path': path} for (src, dst), path in path_dict.items()]
+    path_dict_bytes = pickle.dumps(paths_data)
+    with open(openpath_name, "wb") as f:
+        f.write(path_dict_bytes)
     paths_df = pd.DataFrame(paths_data)
 
     # Display the first few rows of the DataFrame
