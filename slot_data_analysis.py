@@ -34,24 +34,46 @@ def slot_cluster_read(folder_path: str,batch_size: int, slot_order: int):
             while len(folder_data) < batch_size:
                 folder_data.append(None)
             yield folder_data
+def updata_arr_function(arr,switch_node_list_array,read_list_data):
+    nhop = read_list_data['line2']['nhop']
     
+    for hopid in range(int(nhop)):
+        if read_list_data['line1']['firstflag'] == "not first RTT":
+            temp = read_list_data['part4'][hopid]['now_ack_byte']
+            temp = int(temp)
+            switchid = switch_node_list_array[hopid]
+            if temp >= arr[switchid][0]:
+                arr[switchid][0]= temp   
+        elif read_list_data['line1']['firstflag'] == "first RTT":
+            temp = read_list_data['part4'][hopid]['byte']
+            temp = int(temp)
+            switchid = switch_node_list_array[hopid]
+            if temp >= arr[switchid][0]:
+                arr[switchid][0]= temp   
 
 def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,node_number:int,feature_number:int,time_length:int,batchsize:int):
     # read route file
     with open(route_src_path, 'rb') as f:
         data_loaded = pickle.load(f)
-    print(type(data_loaded[0]))
+    #print(type(data_loaded[0]))
     paths_df = pd.DataFrame(data_loaded)
-    print(paths_df.head())
+    #print(paths_df.head())
+
+    # 创建一个文件夹
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    
     # read cluster file    
-    for i in range(batchsize):
-        cluster_read = slot_cluster_read(cluster_src_path, batchsize,i)
-        while True:
-            # setup graph data
-            arr = np.zeros((node_number, feature_number))
+    for t in range(time_length):
+        cluster_read = slot_cluster_read(cluster_src_path, batchsize,t)
+        # setup graph data
+        arr = np.zeros((node_number, feature_number))
+        end_flag = False
+        while True:            
             read_list = next(cluster_read)
             for i in range(batchsize):
                 if read_list[i] == None:
+                    end_flag = True
                     break
             # get route path
             # use source and dst to find switch node / get coordinate
@@ -61,10 +83,18 @@ def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,node_nu
                 dst_id = convert_ip_to_id(dst)
                 path = paths_df.loc[(paths_df['source'] == src_id) & (paths_df['destination'] == dst_id), 'path'].values[0]
                 switch_node_list = path[1:-1]
-                
-            # update graph data by value feature upate function
-
-
+                base_number = 8
+                switch_node_list_array = [x - base_number for x in switch_node_list]
+                print(switch_node_list_array)
+                # update graph data by value feature upate function
+                updata_arr_function(arr,switch_node_list_array,read_list[i])
+            if end_flag == True:
+                break
+        # save array path
+        nyp_path = out_path +'_'+str(t)+'.npy'
+        save_array_path = os.path.join(out_path, nyp_path)
+        np.save(save_array_path, arr)    
+        print(t)
     
         # save file
     return
