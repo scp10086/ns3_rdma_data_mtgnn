@@ -85,7 +85,7 @@ def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,node_nu
                 switch_node_list = path[1:-1]
                 base_number = 8
                 switch_node_list_array = [x - base_number for x in switch_node_list]
-                print(switch_node_list_array)
+                #print(switch_node_list_array)
                 # update graph data by value feature upate function
                 updata_arr_function(arr,switch_node_list_array,read_list[i])
             if end_flag == True:
@@ -104,15 +104,17 @@ if __name__ == '__main__':
 
     # 输出当前工作目录
     print("当前工作目录：", current_dir)
-
+    prefix_folder_path = "/originaldata/8node_4router_testtopo_link_250M/"
+    base_path = "/home/zhanghua/qiaojing/data_analysis"
+    os_path = base_path + prefix_folder_path
     # 更改当前工作目录
-    os.chdir('/home/zhanghua/qiaojing')
+    os.chdir(os_path)
 
     # 输出更改后的工作目录
     print("更改后的工作目录：", os.getcwd())
-
+    
     read_batch_size = 20
-    total_time = 0.1
+    total_time = 1
     start_time = 2
     time_slot = 0.0001
     folder_path = "slot_cluster_totaltime_"+str(total_time)+"_time_slot_"+str(time_slot)

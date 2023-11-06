@@ -12,7 +12,7 @@ from util import *
 from trainer import Optim
 import gc
 import os
-def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
+def evaluate(data,X, Y, model, evaluateL2, evaluateL1, batch_size):
     model.eval()
     total_loss = 0
     total_loss_l1 = 0
@@ -20,7 +20,7 @@ def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
     predict = None
     test = None
 
-    for X, Y in data.get_batches(X, Y, batch_size, False):
+    for X, Y in data.get_batches(X, Y,batch_size, False):
         X = X.permute(0,2,3,1)
         with torch.no_grad():
             output = model(X)
@@ -59,7 +59,7 @@ def train(data, X, Y, model, criterion, optim, batch_size):
     total_loss = 0
     n_samples = 0
     iter = 0
-    for X, Y in data.get_batches(X, Y, batch_size, True):
+    for X, Y in data.get_batches(X, Y, batch_size, False):
         model.zero_grad()
         X = X.permute(0,2,3,1)
         if iter % args.step_size == 0:
@@ -95,7 +95,7 @@ def train(data, X, Y, model, criterion, optim, batch_size):
 
 
 parser = argparse.ArgumentParser(description='PyTorch Time series forecasting')
-parser.add_argument('--data', type=str, default='.data/slot_out0.1_time_slot_0.0001',
+parser.add_argument('--data', type=str, default='/home/zhanghua/qiaojing/data_analysis/MTGNN/data/slot_out0.1_time_slot_0.0001',
                     help='location of the data file')
 parser.add_argument('--log_interval', type=int, default=2000, metavar='N',
                     help='report interval')
@@ -137,8 +137,10 @@ parser.add_argument('--num_split',type=int,default=1,help='number of splits for 
 parser.add_argument('--step_size',type=int,default=100,help='step_size')
 
 
-parser.add_argument('--hpcc_time_run_time',type= float,default=100,help='step_size')
-parser.add_argument('--hpcc_time_slot',type= float,default=100,help='step_size')
+parser.add_argument('--hpcc_time_run_time',type= float,default=0.1,help='hpcc_time_run_time')
+parser.add_argument('--hpcc_time_slot',type= float,default=0.0001,help='hpcc_time_slot')
+parser.add_argument('--switchnode',type= int,default=4,help='switchnode')
+parser.add_argument('--switchnodefeature',type= int,default=1,help='step_size')
 args = parser.parse_args()
 device = torch.device(args.device)
 torch.set_num_threads(3)
@@ -147,7 +149,7 @@ def main():
     print(device)
     # totem dataloader
     
-    Data = DataLoader_slot_txbyte(args.data, 0.6, 0.2, device, args.horizon, args.seq_in_len, args.normalize)
+    Data = DataLoader_slot_txbyte(args.data, 0.6, 0.2, device, args.horizon, args.seq_in_len, args.hpcc_time_run_time,args.hpcc_time_slot ,args.switchnode,args.switchnodefeature, args.normalize)
 
     model = gtnet(args.gcn_true, args.buildA_true, args.gcn_depth, args.num_nodes,
                   device, dropout=args.dropout, subgraph_size=args.subgraph_size,
@@ -181,7 +183,7 @@ def main():
         print('begin training')
         for epoch in range(1, args.epochs + 1):
             epoch_start_time = time.time()
-            train_loss = train(Data, Data.train[0], Data.train[1], model, criterion, optim, args.batch_size)
+            train_loss = train(Data,Data.train_set[0],Data.train_set[1], model, criterion, optim, args.batch_size)
             val_loss, val_rae, val_corr = evaluate(Data, Data.valid[0], Data.valid[1], model, evaluateL2, evaluateL1,
                                                args.batch_size)
             print(

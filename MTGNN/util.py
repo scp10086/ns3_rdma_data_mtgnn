@@ -6,7 +6,11 @@ import torch
 from scipy.sparse import linalg
 from torch.autograd import Variable
 
-
+import re
+from typing import List, Iterator
+import pandas as pd
+import math
+import json
 
 def normal_std(x):
     return x.std() * np.sqrt((len(x) - 1.)/(len(x)))
@@ -91,31 +95,30 @@ class DataLoaderS(object):
 
 class DataLoader_slot_txbyte(object):
     # train and valid is the ratio of training set and validation set. test = 1 - train - valid
-    def __init__(self, file_name, train, valid, device, horizon, window, normalize=2):
+    def __init__(self, file_name, train, valid, device, horizon, window,hpcc_time_run_time, hpcc_time_slot,node,node_feature, normalize=2, ):
         self.P = window
         self.h = horizon
         # find length od dataset
-        fin_temp_adj = torch.load(file_name + "temp_adj.pt")
-        fin_temp_flowdata = torch.load(file_name + "temp_flowdata.pt")
-        fin_timeline = torch.load(file_name + "timeline.pt")
-        self.rawdat = fin_temp_flowdata
-        self.rawdat = self.rawdat.permute(2,1,0)
-        self.rawdat = self.rawdat.numpy()
-        self.dat = np.zeros(self.rawdat.shape)
-        self.n, self.m1, self.m2 = self.dat.shape
+        self.time_length = math.ceil(hpcc_time_run_time/hpcc_time_slot)
+        self.node = node
+        self.node_feature = node_feature
+        self.single_numpy_prefix = "slot_out"+str(hpcc_time_run_time)+"_time_slot_"+str(hpcc_time_slot)
+        self.folder_name = file_name
         self.normalize = 2
-        self.scale = np.ones((self.m1,self.m1))
-        self._normalized(normalize)
+        #self.scale = np.ones((self.m1,self.m1))
+
+        # split
+        self.n = self.time_length
         self._split(int(train * self.n), int((train + valid) * self.n), self.n)
 
-        self.scale = torch.from_numpy(self.scale).float()
-        tmp = self.test[1] * self.scale.expand(self.test[1].size(0), self.m1, self.m2)
+        # self.scale = torch.from_numpy(self.scale).float()
+        # tmp = self.test[1] * self.scale.expand(self.test[1].size(0), self.m1, self.m2)
 
-        self.scale = self.scale.to(device)
-        self.scale = Variable(self.scale)
+        # self.scale = self.scale.to(device)
+        # self.scale = Variable(self.scale)
 
-        self.rse = normal_std_slot_txbyte(tmp)
-        self.rae = torch.mean(torch.abs(tmp - torch.mean(tmp)))
+        # self.rse = normal_std_slot_txbyte(tmp)
+        # self.rae = torch.mean(torch.abs(tmp - torch.mean(tmp)))
 
         self.device = device
 
@@ -143,19 +146,19 @@ class DataLoader_slot_txbyte(object):
         train_set = range(self.P + self.h - 1, train)
         valid_set = range(train, valid)
         test_set = range(valid, self.n)
-        self.train = self._batchify(train_set, self.h)
-        self.valid = self._batchify(valid_set, self.h)
-        self.test = self._batchify(test_set, self.h)
+        self.train_set = self._batchify(train_set, self.h)
+        self.valid_set = self._batchify(valid_set, self.h)
+        self.test_set = self._batchify(test_set, self.h)
 
     def _batchify(self, idx_set, horizon):
         n = len(idx_set)
-        X = torch.zeros((n, self.P, self.m1, self.m2))
-        Y = torch.zeros((n, self.m1, self.m2))
+        X = torch.zeros((n, self.P))
+        Y = torch.zeros((n))
         for i in range(n):
             end = idx_set[i] - self.h + 1
             start = end - self.P
-            X[i, :, :,:] = torch.from_numpy(self.dat[start:end, :,:])
-            Y[i, :,:] = torch.from_numpy(self.dat[idx_set[i], :,:])
+            X[i, :] = torch.from_numpy(np.arange(start,end))
+            Y[i] = torch.tensor(idx_set[i])
         return [X, Y]
 
     def get_batches(self, inputs, targets, batch_size, shuffle=True):
@@ -165,14 +168,44 @@ class DataLoader_slot_txbyte(object):
         else:
             index = torch.LongTensor(range(length))
         start_idx = 0
+        single_batchx = np.zeros((self.node,self.node_feature, self.P))
+        batchX = np.zeros((batch_size,self.node,self.node_feature, self.P))
+        batchY = np.zeros((batch_size,self.node,self.node_feature))
         while (start_idx < length):
             end_idx = min(length, start_idx + batch_size)
             excerpt = index[start_idx:end_idx]
-            X = inputs[excerpt]
-            Y = targets[excerpt]
-            X = X.to(self.device)
-            Y = Y.to(self.device)
-            yield Variable(X), Variable(Y)
+            # read from file
+            # batch index
+            batch_index = 0
+            for read_batch in excerpt:
+                # give index number and time_index in the blow loop
+                i = 0
+                for time_index in inputs[read_batch]:
+                    single_numpy_suffix = self.single_numpy_prefix +'_'+str(int(time_index.item()))+'.npy'    
+                    single_numpy_name = os.path.join(self.folder_name, single_numpy_suffix)
+                    # slot_data load from file and its shape is [node, nodefeature]
+                    slot_data = np.load(single_numpy_name)
+                    # append slot_data to form a single batch through time index, the whole data shape is  [node, nodefeature , timelength]
+                    single_batchx[:,:,i] = slot_data
+                    #print(single_batchx[:,:,i])
+                    i=i+1                    
+                # append batch to form a whole batch, the whole data  batchX shape is [batch, node, nodefeature, timelength], data  batchY shape is [batch, node, nodefeature]
+                batchX[batch_index,:,:,:] = single_batchx
+                indexy = targets[read_batch]
+                single_numpy_suffix_y = self.single_numpy_prefix +'_'+str(int(indexy.item()))+'.npy'
+                single_numpy_name_y = os.path.join(self.folder_name, single_numpy_suffix_y)
+                slot_datay = np.load(single_numpy_name_y)
+                batchY[batch_index,:,:] = slot_datay
+                batch_index = batch_index + 1
+            batchX = torch.from_numpy(batchX)
+            batchX = batchX.to(self.device)
+
+            #doing some change
+
+            #data normalized
+
+            #self._normalized(normalize)
+            yield Variable(batchX), Variable(Y)
             start_idx += batch_size
 
 

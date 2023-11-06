@@ -123,9 +123,11 @@ if __name__ == '__main__':
 
     # 输出当前工作目录
     print("当前工作目录：", current_dir)
-
+    prefix_folder_path = "/originaldata/8node_4router_testtopo_link_250M/"
+    base_path = "/home/zhanghua/qiaojing/data_analysis"
+    os_path = base_path + prefix_folder_path
     # 更改当前工作目录
-    os.chdir('/home/zhanghua/qiaojing')
+    os.chdir(os_path)
 
     # 输出更改后的工作目录
     print("更改后的工作目录：", os.getcwd())

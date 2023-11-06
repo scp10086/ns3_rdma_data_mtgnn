@@ -1,6 +1,7 @@
 import re
 from typing import List, Iterator
 import pandas as pd
+import os
 # Define the pattern to extract the data from each line
 pattern_base = (
     r"(?P<time_ns>\d+)\s+n:(?P<node>\d+)\s+"
@@ -75,9 +76,20 @@ def trace_file_iterator(file_path: str, batch_size: int) -> Iterator[List[dict]]
 
 
 if __name__ == '__main__':
-    
+    # 获取当前工作目录
+    current_dir = os.getcwd()
+
+    # 输出当前工作目录
+    print("当前工作目录：", current_dir)
+
+    # 更改当前工作目录
+    os.chdir('/home/zhanghua/qiaojing/data_analysis')
+
+    # 输出更改后的工作目录
+    print("更改后的工作目录：", os.getcwd())
+        
     # Test the final implementation with the first batch of data
-    file_path = 'trace8smaller.txt'
+    file_path = './originaldata/8node_4router_testtopo_link_250M/trace8smaller.txt'
     batch_size = 200
 
     # Create the iterator

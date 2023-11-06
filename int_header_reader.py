@@ -114,18 +114,20 @@ if __name__ == '__main__':
 
     # 输出当前工作目录
     print("当前工作目录：", current_dir)
-
+    prefix_folder_path = "/originaldata/8node_4router_testtopo_link_250M/"
+    base_path = "/home/zhanghua/qiaojing/data_analysis"
+    os_path = base_path + prefix_folder_path
     # 更改当前工作目录
-    os.chdir('/home/zhanghua/qiaojing')
+    os.chdir(os_path)
 
     # 输出更改后的工作目录
     print("更改后的工作目录：", os.getcwd())
     # Test the final implementation with the first batch of data
     #file_path = 'rdmahpccint.txt'
-    file_path = 'intheaderslpit.txt'
+    file_path = 'rdmahpccint.txt'
     
     batch_size = 20
-    total_time = 0.1
+    total_time = 1
     start_time = 2
     time_slot = 0.0001
     # # Create the iterator
