@@ -34,24 +34,32 @@ def slot_cluster_read(folder_path: str,batch_size: int, slot_order: int):
             while len(folder_data) < batch_size:
                 folder_data.append(None)
             yield folder_data
-def updata_arr_function(arr,switch_node_list_array,read_list_data):
+def updata_arr_function(arr,read_list_data,routepath,switch_number,host_number,storedvalue_adjacency_matrix):
     nhop = read_list_data['line2']['nhop']
     
+    matrix_size = switch_number+host_number
+    # adj_matrix size (matrix_size,matrix_size)
+
     for hopid in range(int(nhop)):
+        sourcenode = routepath[hopid+1]
+        dstnode = routepath[hopid+2]
         if read_list_data['line1']['firstflag'] == "not first RTT":
             temp = read_list_data['part4'][hopid]['now_ack_byte']
             temp = int(temp)
-            switchid = switch_node_list_array[hopid]
-            if temp >= arr[switchid][0]:
-                arr[switchid][0]= temp   
+            if temp >= storedvalue_adjacency_matrix[sourcenode][dstnode]:
+                storedvalue_adjacency_matrix[sourcenode][dstnode]= temp   
         elif read_list_data['line1']['firstflag'] == "first RTT":
             temp = read_list_data['part4'][hopid]['byte']
             temp = int(temp)
-            switchid = switch_node_list_array[hopid]
-            if temp >= arr[switchid][0]:
-                arr[switchid][0]= temp   
-
-def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,node_number:int,feature_number:int,time_length:int,batchsize:int):
+            if temp >= storedvalue_adjacency_matrix[sourcenode][dstnode]:
+                storedvalue_adjacency_matrix[sourcenode][dstnode]= temp
+    # sum all data in the rows of storedvalue_adjacency_matrix
+    #print(storedvalue_adjacency_matrix)
+    for i in range(switch_number):
+        for j in range(matrix_size):
+                arr[i][0] += storedvalue_adjacency_matrix[i+host_number][j]   
+    return
+def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,switch_number:int,host_number:int,feature_number:int,time_length:int,batchsize:int,adj_matrix:np.ndarray):
     # read route file
     with open(route_src_path, 'rb') as f:
         data_loaded = pickle.load(f)
@@ -62,41 +70,47 @@ def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,node_nu
     # 创建一个文件夹
     if not os.path.exists(out_path):
         os.makedirs(out_path)
-    
-    # read cluster file    
-    for t in range(time_length):
-        cluster_read = slot_cluster_read(cluster_src_path, batchsize,t)
-        # setup graph data
-        arr = np.zeros((node_number, feature_number))
-        end_flag = False
-        while True:            
-            read_list = next(cluster_read)
-            for i in range(batchsize):
-                if read_list[i] == None:
-                    end_flag = True
+    matrix_size = switch_number+host_number
+    storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)
+    previous_storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)    
+    diff_storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)
+    previous_arr = np.zeros((switch_number, feature_number))
+    diff_arr = np.zeros((switch_number, feature_number))
+    # read cluster file
+    with open('output_numpy_train_data2.txt', 'a+') as f:            
+        for t in range(time_length):
+            cluster_read = slot_cluster_read(cluster_src_path, batchsize,t)
+            # setup graph data
+            
+            end_flag = False
+            while True:            
+                read_list = next(cluster_read)
+                for i in range(batchsize):
+                    if read_list[i] == None:
+                        end_flag = True
+                        break
+                # get route path
+                # use source and dst to find switch node / get coordinate
+                    src = read_list[i]['line3']['sip']
+                    src_id = convert_ip_to_id(src)
+                    dst = read_list[i]['line3']['dip']
+                    dst_id = convert_ip_to_id(dst)
+                    path = paths_df.loc[(paths_df['source'] == src_id) & (paths_df['destination'] == dst_id), 'path'].values[0]
+                    # update graph data by value feature upate function
+                    arr = np.zeros((switch_number, feature_number))
+                    updata_arr_function(arr,read_list[i],path,switch_number,host_number,storedvalue_adjacency_matrix)
+                if end_flag == True:
                     break
-            # get route path
-            # use source and dst to find switch node / get coordinate
-                src = read_list[i]['line3']['sip']
-                src_id = convert_ip_to_id(src)
-                dst = read_list[i]['line3']['dip']
-                dst_id = convert_ip_to_id(dst)
-                path = paths_df.loc[(paths_df['source'] == src_id) & (paths_df['destination'] == dst_id), 'path'].values[0]
-                switch_node_list = path[1:-1]
-                base_number = 8
-                switch_node_list_array = [x - base_number for x in switch_node_list]
-                #print(switch_node_list_array)
-                # update graph data by value feature upate function
-                updata_arr_function(arr,switch_node_list_array,read_list[i])
-            if end_flag == True:
-                break
-        # save array path
-        nyp_path = out_path +'_'+str(t)+'.npy'
-        save_array_path = os.path.join(out_path, nyp_path)
-        np.save(save_array_path, arr)    
-        print(t)
-    
-        # save file
+            # save array path
+            diff_storedvalue_adjacency_matrix = storedvalue_adjacency_matrix - previous_storedvalue_adjacency_matrix
+            previous_storedvalue_adjacency_matrix = storedvalue_adjacency_matrix.copy()
+            #print(diff_storedvalue_adjacency_matrix)
+            diff_arr = arr - previous_arr
+            previous_arr = arr.copy()
+            #print(diff_arr)
+            #print(t)
+            # write arr to txt file
+            np.savetxt(f, arr.T, delimiter=',', fmt='%d')
     return
 if __name__ == '__main__':
     # 获取当前工作目录
@@ -112,7 +126,9 @@ if __name__ == '__main__':
 
     # 输出更改后的工作目录
     print("更改后的工作目录：", os.getcwd())
-    
+    # read adj matrix
+    adj_matrix = np.load('adj_matrix.npy')
+    #print(adj_matrix)
     read_batch_size = 20
     total_time = 1
     start_time = 2
@@ -121,7 +137,8 @@ if __name__ == '__main__':
     route_file_path = "routing_path.pkl"
     slot_order = 0
     outfolder_path = "slot_out"+str(total_time)+"_time_slot_"+str(time_slot)
-    node_number = 4
+    host_number = 8
+    switch_number = 4
     feature_number = 1
     time_length = math.ceil(total_time/time_slot)
-    slot_to_one(route_file_path,folder_path, outfolder_path,node_number,feature_number,time_length,read_batch_size)
+    slot_to_one(route_file_path,folder_path, outfolder_path,switch_number,host_number,feature_number,time_length,read_batch_size,adj_matrix)

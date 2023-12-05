@@ -79,12 +79,14 @@ def intheader_file_iterator(file_path: str, batch_size: int) -> Iterator[List[di
             if not line:
                 break
 # rearrange data according to the time slot and write to file
-def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: float, time_slot: float):
-    folder_name = "slot_cluster_totaltime_"+str(total_time)+"_time_slot_"+str(time_slot)
-    batch_size = 200
+def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: float, time_slot: float,prefix_path:str):
+    folder_after_name = "slot_cluster_totaltime_"+str(total_time)+"_time_slot_"+str(time_slot)
+    batch_size = batch_size
     trace_iterator = intheader_file_iterator(file_path, batch_size)
     # make a folder
     total_slot_number = math.ceil(total_time/time_slot)
+    folder_name = prefix_path + '/' + folder_after_name 
+    print(prefix_path)
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
     #make  total_slot_number txt
@@ -93,6 +95,7 @@ def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: fl
         file_path = os.path.join(folder_name, file_name)
         with open(file_path, "w") as f:
             pass
+    totallength = 0
     while True:
         first_batch_data = next(trace_iterator)
         for i in range(batch_size):
@@ -107,7 +110,9 @@ def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: fl
             with open(openpath_name, "a+") as f:
                 json.dump(first_batch_data[i], f)
                 f.write('\n')
-
+        totallength = totallength + batch_size
+        if totallength % 100000 == 0:
+            print("totallength",totallength)
 if __name__ == '__main__':
     # 获取当前工作目录
     current_dir = os.getcwd()
@@ -135,6 +140,6 @@ if __name__ == '__main__':
     # # Get the first batch of data
     # while True:
     #     first_batch_data = next(trace_iterator)
-    
-    slot_cluster(file_path, batch_size,total_time,start_time,time_slot)
+    prefix_folder_path = ""
+    slot_cluster(file_path, batch_size,total_time,start_time,time_slot,prefix_folder_path)
 

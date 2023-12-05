@@ -16,6 +16,8 @@ def normal_std(x):
     return x.std() * np.sqrt((len(x) - 1.)/(len(x)))
 def normal_std_slot_txbyte(x):
     return x.std() 
+def normal_std_totem(x):
+    return x.std() 
 class DataLoaderS(object):
     # train and valid is the ratio of training set and validation set. test = 1 - train - valid
     def __init__(self, file_name, train, valid, device, horizon, window, normalize=2):
@@ -92,7 +94,93 @@ class DataLoaderS(object):
             Y = Y.to(self.device)
             yield Variable(X), Variable(Y)
             start_idx += batch_size
+class DataLoadertotem(object):
+    # train and valid is the ratio of training set and validation set. test = 1 - train - valid
+    def __init__(self, file_name, train, valid, device, horizon, window, normalize=2):
+        self.P = window
+        self.h = horizon
+        # new open pt
+        fin_temp_adj = torch.load(file_name + "temp_adj.pt")
+        fin_temp_flowdata = torch.load(file_name + "temp_flowdata.pt")
+        fin_timeline = torch.load(file_name + "timeline.pt")
+        self.rawdat = fin_temp_flowdata
+        self.rawdat = self.rawdat.permute(2,1,0)
+        self.rawdat = self.rawdat.numpy()
+        self.dat = np.zeros(self.rawdat.shape)
+        self.n, self.m1, self.m2 = self.dat.shape
+        self.normalize = 2
+        self.scale = np.ones((self.m1,self.m1))
+        self._normalized(normalize)
+        self._split(int(train * self.n), int((train + valid) * self.n), self.n)
 
+        self.scale = torch.from_numpy(self.scale).float()
+        tmp = self.test[1] * self.scale.expand(self.test[1].size(0), self.m1, self.m2)
+
+        self.scale = self.scale.to(device)
+        self.scale = Variable(self.scale)
+
+        self.rse = normal_std_totem(tmp)
+        self.rae = torch.mean(torch.abs(tmp - torch.mean(tmp)))
+
+        self.device = device
+
+    def _normalized(self, normalize):
+        # normalized by the maximum value of entire matrix.
+
+        if (normalize == 0):
+            self.dat = self.rawdat
+
+        if (normalize == 1):
+            self.dat = self.rawdat / np.max(self.rawdat)
+
+        # normlized by the maximum value of each row(sensor).
+        if (normalize == 2):
+            for i in range(self.m1):
+                for j in range(self.m2):                    
+                    self.scale[i,j] = np.max(np.abs(self.rawdat[:, i,j]))
+                    if self.scale[i,j] == 0:
+                        self.dat[:, i,j] = 0
+                    else:
+                        self.dat[:, i,j] = self.rawdat[:, i,j] / np.max(np.abs(self.rawdat[:, i,j]))
+
+    def _split(self, train, valid, test):
+
+        train_set = range(self.P + self.h - 1, train)
+        valid_set = range(train, valid)
+        test_set = range(valid, self.n)
+        self.train = self._batchify(train_set, self.h)
+        self.valid = self._batchify(valid_set, self.h)
+        self.test = self._batchify(test_set, self.h)
+
+    def _batchify(self, idx_set, horizon):
+        n = len(idx_set)
+        X = torch.zeros((n, self.P, self.m1, self.m2))
+        Y = torch.zeros((n, self.m1, self.m2))
+        for i in range(n):
+            end = idx_set[i] - self.h + 1
+            start = end - self.P
+            X[i, :, :,:] = torch.from_numpy(self.dat[start:end, :,:])
+            Y[i, :,:] = torch.from_numpy(self.dat[idx_set[i], :,:])
+        return [X, Y]
+
+    def get_batches(self, inputs, targets, batch_size, shuffle=True):
+        length = len(inputs)
+        inputs
+        targets
+        if shuffle:
+            index = torch.randperm(length)
+        else:
+            index = torch.LongTensor(range(length))
+        start_idx = 0
+        while (start_idx < length):
+            end_idx = min(length, start_idx + batch_size)
+            excerpt = index[start_idx:end_idx]
+            X = inputs[excerpt]
+            Y = targets[excerpt]
+            X = X.to(self.device)
+            Y = Y.to(self.device)
+            yield Variable(X), Variable(Y)
+            start_idx += batch_size
 class DataLoader_slot_txbyte(object):
     # train and valid is the ratio of training set and validation set. test = 1 - train - valid
     def __init__(self, file_name, train, valid, device, horizon, window,hpcc_time_run_time, hpcc_time_slot,node,node_feature, normalize=2, ):

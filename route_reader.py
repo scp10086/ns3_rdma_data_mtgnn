@@ -104,7 +104,8 @@ def get_full_path_r(routing_df):
         for dst in routing_df['dst'].unique():
             # 如果源节点和目标节点相同，则路径只包含源节点和目标节点
             if src == dst:
-                path_dict[(src, dst)] = [src, dst]
+                pass
+                #path_dict[(src, dst)] = [src, dst]
             else:
                 # 计算从源节点到中间节点的路径
                 path = get_path_r(src, dst, routing_df, path_dict)
@@ -116,7 +117,34 @@ def get_full_path_r(routing_df):
     paths_df = pd.DataFrame(paths_data)
     
     return path_dict
-
+def get_adj_matrix_from_route_table(paths_data):
+    nodenumber = compute_number_node(paths_data)
+    adj_matrix = np.zeros((nodenumber, nodenumber))
+    for item in paths_data:
+        path = item['path']
+        for i in range(len(path)-1):
+            adj_matrix[path[i]][path[i+1]] = 1
+    #print(adj_matrix)
+    return adj_matrix
+def compute_number_node(paths_data):
+    source_node_list = []
+    dst_node_list = []
+    for item in paths_data:
+        source = item  ['source']
+        dst = item['destination']
+        path = item['path']
+        # compute different number of node in source node and  dst node according to the path
+        if source not in source_node_list:
+            source_node_list.append(source)
+        if dst not in dst_node_list:
+            dst_node_list.append(dst)
+    #print("source_node_list: ", source_node_list)
+    #print("dst_node_list: ", dst_node_list)
+    total_node_list = []
+    # combine the source_node_list and dst_node_list without duplicate in both list 
+    total_node_list = list(set(source_node_list).union(set(dst_node_list)))
+    #print("total_node_list: ", total_node_list)
+    return len(total_node_list)
 if __name__ == '__main__':
     # 获取当前工作目录
     current_dir = os.getcwd()
@@ -150,7 +178,7 @@ if __name__ == '__main__':
     routing_tensor = torch.from_numpy(routing_np)
 
     # Display the first few rows of the tensor
-    print(routing_tensor[:5])
+    #print(routing_tensor[:5])
     
     # Define the paths to save and load the tensor
     save_path = 'routing_tensor.pt'
@@ -163,11 +191,15 @@ if __name__ == '__main__':
 
     # Create a DataFrame to store the full paths from source to destination
     paths_data = [{'source': src, 'destination': dst, 'path': path} for (src, dst), path in path_dict.items()]
+    # write the paths_data to the  txt file
+    pd.DataFrame(paths_data).to_csv('paths_data.csv', index=False)
+    adj_matrix = get_adj_matrix_from_route_table(paths_data)
+    # store adj_matrix as numpy array
+    np.save('adj_matrix.npy', adj_matrix)
     path_dict_bytes = pickle.dumps(paths_data)
     with open(openpath_name, "wb") as f:
         f.write(path_dict_bytes)
-    paths_df = pd.DataFrame(paths_data)
 
     # Display the first few rows of the DataFrame
-    print(paths_df.head())
-    print(paths_df)
+    #print(paths_df.head())
+    #print(paths_df)
