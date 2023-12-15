@@ -8,7 +8,32 @@ import numpy as np
 import torch
 import route_reader
 import pickle
-
+def generate_diff_matrix(matrix):
+    # get shape of matrix
+    totalbashsize = matrix.shape[0]
+    nodenumber = matrix.shape[1]
+    link_data_of_node = matrix.shape[2]
+    # diff_matrx = previous_matrix - matrix
+    diff_matrix = np.zeros((totalbashsize,nodenumber,link_data_of_node))
+    for i in range(totalbashsize):
+        if i == 0:
+            diff_matrix[i] = matrix[i]
+        else:
+            diff_matrix[i] = matrix[i] - matrix[i-1]
+    return diff_matrix
+def generate_diff_arr(arr):
+    # get shape of matrix
+    totalbashsize = arr.shape[0]
+    nodenumber = arr.shape[1]
+    feature_number = arr.shape[2]
+    # diff_matrx = previous_matrix - matrix
+    diff_arr = np.zeros((totalbashsize,nodenumber,feature_number))
+    for i in range(totalbashsize):
+        if i == 0:
+            diff_arr[i] = arr[i]
+        else:
+            diff_arr[i] = arr[i] - arr[i-1]
+    return diff_arr
 # Function to convert IP from binary representation to dotted notation only the node number is blow 255
 def convert_ip_to_id(bin_str):
     if isinstance(bin_str, str):
@@ -61,46 +86,55 @@ def updata_arr_function(arr,read_list_data,routepath,switch_number,host_number,s
     return
 def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,switch_number:int,host_number:int,feature_number:int,time_length:int,batchsize:int,adj_matrix:np.ndarray):
     # read route file
+    print(route_src_path)
     with open(route_src_path, 'rb') as f:
         data_loaded = pickle.load(f)
     #print(type(data_loaded[0]))
     paths_df = pd.DataFrame(data_loaded)
     #print(paths_df.head())
 
-    # 创建一个文件夹
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
     matrix_size = switch_number+host_number
     storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)
     previous_storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)    
     diff_storedvalue_adjacency_matrix = np.zeros((matrix_size, matrix_size), dtype=int)
     previous_arr = np.zeros((switch_number, feature_number))
     diff_arr = np.zeros((switch_number, feature_number))
+    arr = np.zeros((switch_number, feature_number))
     # read cluster file
-    with open('output_numpy_train_data2.txt', 'a+') as f:            
-        for t in range(time_length):
-            cluster_read = slot_cluster_read(cluster_src_path, batchsize,t)
-            # setup graph data
-            
-            end_flag = False
-            while True:            
-                read_list = next(cluster_read)
-                for i in range(batchsize):
-                    if read_list[i] == None:
-                        end_flag = True
-                        break
-                # get route path
-                # use source and dst to find switch node / get coordinate
-                    src = read_list[i]['line3']['sip']
-                    src_id = convert_ip_to_id(src)
-                    dst = read_list[i]['line3']['dip']
-                    dst_id = convert_ip_to_id(dst)
-                    path = paths_df.loc[(paths_df['source'] == src_id) & (paths_df['destination'] == dst_id), 'path'].values[0]
-                    # update graph data by value feature upate function
-                    arr = np.zeros((switch_number, feature_number))
-                    updata_arr_function(arr,read_list[i],path,switch_number,host_number,storedvalue_adjacency_matrix)
-                if end_flag == True:
+    raw_storedvalue_adjacency_matrix_path = cluster_src_path + '/'+'raw_storedvalue_adjacency_matrix_path.npy'
+    raw_storedvalue_adjacency_matrix_list = []
+    raw_diff_storedvalue_adjacency_matrix_path = cluster_src_path + '/'+'raw_diff_storedvalue_adjacency_matrix_path.npy'
+    raw_diff_storedvalue_adjacency_matrix_list = []
+    raw_arr_path = cluster_src_path + '/'+'raw_arr_path.npy'
+    raw_arr_list = []
+    raw_diff_arr_path = cluster_src_path + '/'+'raw_diff_arr_path.npy'
+    raw_diff_arr_list = []
+         
+    for t in range(time_length):
+        cluster_read = slot_cluster_read(cluster_src_path, batchsize,t)
+        # setup graph data
+        if t % 500 == 0:
+            print(t)
+        end_flag = False
+        while True:            
+            read_list = next(cluster_read)
+            for i in range(batchsize):
+                if read_list[i] == None:
+                    end_flag = True
                     break
+            # get route path
+            # use source and dst to find switch node / get coordinate
+                src = read_list[i]['line3']['sip']
+                src_id = convert_ip_to_id(src)
+                dst = read_list[i]['line3']['dip']
+                dst_id = convert_ip_to_id(dst)
+                path = paths_df.loc[(paths_df['source'] == src_id) & (paths_df['destination'] == dst_id), 'path'].values[0]
+                # update graph data by value feature upate function
+                local_arr = np.zeros((switch_number, feature_number))
+                updata_arr_function(local_arr,read_list[i],path,switch_number,host_number,storedvalue_adjacency_matrix)
+                arr = local_arr
+            if end_flag == True:
+                break
             # save array path
             diff_storedvalue_adjacency_matrix = storedvalue_adjacency_matrix - previous_storedvalue_adjacency_matrix
             previous_storedvalue_adjacency_matrix = storedvalue_adjacency_matrix.copy()
@@ -109,8 +143,21 @@ def slot_to_one(route_src_path: str,cluster_src_path: str, out_path: str,switch_
             previous_arr = arr.copy()
             #print(diff_arr)
             #print(t)
-            # write arr to txt file
-            np.savetxt(f, arr.T, delimiter=',', fmt='%d')
+        raw_storedvalue_adjacency_matrix_list = np.append(raw_storedvalue_adjacency_matrix_list,storedvalue_adjacency_matrix)
+        raw_diff_storedvalue_adjacency_matrix_list = np.append(raw_diff_storedvalue_adjacency_matrix_list,diff_storedvalue_adjacency_matrix)
+        raw_arr_list = np.append(raw_arr_list,arr)
+        raw_diff_arr_list = np.append(raw_diff_arr_list,diff_arr)
+    # save matrix, arr, diff_matrix, diff_arr
+    raw_storedvalue_adjacency_matrix_list = raw_storedvalue_adjacency_matrix_list.reshape(time_length,matrix_size,matrix_size)
+    np.save(raw_storedvalue_adjacency_matrix_path, raw_storedvalue_adjacency_matrix_list)
+    raw_diff_storedvalue_adjacency_matrix_list = raw_diff_storedvalue_adjacency_matrix_list.reshape(time_length,matrix_size,matrix_size)
+    np.save(raw_diff_storedvalue_adjacency_matrix_path, raw_diff_storedvalue_adjacency_matrix_list)
+    raw_arr_list = raw_arr_list.reshape(time_length,switch_number,feature_number)
+    np.save(raw_arr_path, raw_arr_list)
+    raw_diff_arr_list = raw_diff_arr_list.reshape(time_length,switch_number,feature_number)
+    np.save(raw_diff_arr_path, raw_diff_arr_list)
+    
+
     return
 if __name__ == '__main__':
     # 获取当前工作目录

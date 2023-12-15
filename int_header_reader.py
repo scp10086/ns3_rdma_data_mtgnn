@@ -89,30 +89,30 @@ def slot_cluster(file_path: str,batch_size: int,total_time: float,start_time: fl
     print(prefix_path)
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
-    #make  total_slot_number txt
-    for i in range(total_slot_number):
-        file_name = f"file_"+str(i)+".txt"
-        file_path = os.path.join(folder_name, file_name)
-        with open(file_path, "w") as f:
-            pass
-    totallength = 0
-    while True:
-        first_batch_data = next(trace_iterator)
-        for i in range(batch_size):
-            if first_batch_data[i] == None:
-                return
-            time_record = int(first_batch_data[i]["line3"]["time_step"])
-            time_record = float(time_record/1e9)
-            time_difference = time_record - start_time
-            time_slot_order = math.floor( time_difference / time_slot)
-            openfile_name =  f"file_"+str(time_slot_order)+".txt"
-            openpath_name = os.path.join(folder_name, openfile_name)
-            with open(openpath_name, "a+") as f:
-                json.dump(first_batch_data[i], f)
-                f.write('\n')
-        totallength = totallength + batch_size
-        if totallength % 100000 == 0:
-            print("totallength",totallength)
+        #make  total_slot_number txt
+        for i in range(total_slot_number):
+            file_name = f"file_"+str(i)+".txt"
+            file_path = os.path.join(folder_name, file_name)
+            with open(file_path, "w") as f:
+                pass
+        totallength = 0
+        while True:
+            first_batch_data = next(trace_iterator)
+            for i in range(batch_size):
+                if first_batch_data[i] == None:
+                    return
+                time_record = int(first_batch_data[i]["line3"]["time_step"])
+                time_record = float(time_record/1e9)
+                time_difference = time_record - start_time
+                time_slot_order = math.floor( time_difference / time_slot)
+                openfile_name =  f"file_"+str(time_slot_order)+".txt"
+                openpath_name = os.path.join(folder_name, openfile_name)
+                with open(openpath_name, "a+") as f:
+                    json.dump(first_batch_data[i], f)
+                    f.write('\n')
+            totallength = totallength + batch_size
+            if totallength % 100000 == 0:
+                print("totallength",totallength)
 if __name__ == '__main__':
     # 获取当前工作目录
     current_dir = os.getcwd()
